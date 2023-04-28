@@ -2,6 +2,8 @@ import json
 import sys
 from io import BytesIO
 # Этот класс поможет нам сделать картинку из потока байт
+from selection_ll import selective
+
 
 import requests
 from PIL import Image
@@ -15,27 +17,16 @@ geocoder_params = {
     "format": "json"}
 response1 = requests.get(geocoder_api_server, params=geocoder_params)
 
-# Преобразуем ответ в json-объект
-json_response1 = response1.json()
-# Получаем первый топоним из ответа геокодера.
-toponym = json_response1["response"]["GeoObjectCollection"]["featureMember"][0]["GeoObject"]
-toponym_coodrinates = toponym["Point"]["pos"]
-# Долгота и широта:
-toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
-
-koords = toponym["boundedBy"]["Envelope"]
-str_koords = (koords["upperCorner"] + '~' + koords["lowerCorner"]).replace(' ', ',')
+select_map_params = selective(response1)
 
 search_api_server = "https://search-maps.yandex.ru/v1/"
 api_key = "dda3ddba-c9ea-4ead-9010-f43fbc15c6e3"
-
-address_ll = ','.join((toponym["Point"]["pos"]).split(' '))
 
 search_params = {
     "apikey": api_key,
     "text": "аптека",
     "lang": "ru_RU",
-    "ll": address_ll,
+    "ll": select_map_params['ll'],
     "type": "biz"
 }
 
@@ -70,7 +61,7 @@ delta = "0.015"
 # Собираем параметры для запроса к StaticMapsAPI:
 map_params = {
     # позиционируем карту центром на наш исходный адрес
-    "ll": address_ll,
+    "ll": select_map_params['ll'],
     "l": "map",
     # добавим точку, чтобы указать найденную аптеку
     "pt": '~'.join(markers)

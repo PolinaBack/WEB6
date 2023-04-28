@@ -2,6 +2,8 @@ import json
 import sys
 from io import BytesIO
 # Этот класс поможет нам сделать картинку из потока байт
+from selection_ll import selective
+from distance import lonlat_distance
 
 import requests
 from PIL import Image
@@ -15,27 +17,16 @@ geocoder_params = {
     "format": "json"}
 response1 = requests.get(geocoder_api_server, params=geocoder_params)
 
-# Преобразуем ответ в json-объект
-json_response1 = response1.json()
-# Получаем первый топоним из ответа геокодера.
-toponym = json_response1["response"]["GeoObjectCollection"]["featureMember"][0]["GeoObject"]
-toponym_coodrinates = toponym["Point"]["pos"]
-# Долгота и широта:
-toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
-
-koords = toponym["boundedBy"]["Envelope"]
-str_koords = (koords["upperCorner"] + '~' + koords["lowerCorner"]).replace(' ', ',')
+select_map_params = selective(response1)
 
 search_api_server = "https://search-maps.yandex.ru/v1/"
 api_key = "dda3ddba-c9ea-4ead-9010-f43fbc15c6e3"
-
-address_ll = ','.join((toponym["Point"]["pos"]).split(' '))
 
 search_params = {
     "apikey": api_key,
     "text": "аптека",
     "lang": "ru_RU",
-    "ll": address_ll,
+    "ll": select_map_params['ll'],
     "type": "biz"
 }
 
@@ -66,12 +57,11 @@ delta = "0.005"
 # Собираем параметры для запроса к StaticMapsAPI:
 map_params = {
     # позиционируем карту центром на наш исходный адрес
-    "ll": address_ll,
+    "ll": select_map_params['ll'],
     "spn": ",".join([delta, delta]),
     "l": "map",
     # добавим точку, чтобы указать найденную аптеку
-    "pt": ",".join([toponym_longitude, toponym_lattitude]) +
-          ',pm2rdm' + '~' + "{0},pm2dgl".format(org_point)
+    "pt": select_map_params['pt'] + '~' + "{0},pm2dgl".format(org_point)
 }
 
 map_api_server = "http://static-maps.yandex.ru/1.x/"
@@ -80,9 +70,9 @@ response = requests.get(map_api_server, params=map_params)
 
 print(f"{org_name} - {org_address}")
 print(f"Режим работы: {org_time}")
-path = ((((float(toponym_lattitude) - point[1]) * 111.33) ** 2)
-        + ((float(toponym_longitude) - point[0]) * 111) ** 2) ** 0.5
-print(f"Расстояние от заданного объекта до ближайшей аптеки - {round(path * 1000, 2)}м")
+
+print(f"Расстояние от заданного объекта до ближайшей аптеки - "
+      f"{lonlat_distance((float(select_map_params['ll'].split(',')[0]), (float(select_map_params['ll'].split(',')[1]))), point)}м")
 
 Image.open(BytesIO(
     response.content)).show()
